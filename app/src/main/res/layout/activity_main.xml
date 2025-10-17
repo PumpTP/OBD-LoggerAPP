@@ -5,6 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
+    <!-- Connection / status -->
     <TextView
         android:id="@+id/tvStatus"
         android:text="Status: Disconnected"
@@ -36,6 +37,7 @@
         android:background="#CCCCCC"
         android:layout_marginVertical="12dp"/>
 
+    <!-- Live readouts -->
     <TextView
         android:id="@+id/tvElapsed"
         android:text="t = 0.0 s"
@@ -59,6 +61,135 @@
         android:layout_height="wrap_content"
         android:paddingTop="4dp"/>
 
+    <!-- Selection panel -->
+    <TextView
+        android:text="Select data to log:"
+        android:textStyle="bold"
+        android:layout_marginTop="12dp"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"/>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:id="@+id/pidPanel"
+            android:orientation="vertical"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <CheckBox
+                android:id="@+id/cb03"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Fuel system status (0x03)"
+                android:checked="false" />
+
+            <CheckBox
+                android:id="@+id/cb04"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Calculated engine load (0x04)"
+                android:checked="true" />
+
+            <CheckBox
+                android:id="@+id/cb05"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Coolant temp (0x05)"
+                android:checked="true" />
+
+            <CheckBox
+                android:id="@+id/cb0B"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="MAP (0x0B)"
+                android:checked="true" />
+
+            <CheckBox
+                android:id="@+id/cb06"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Short-term fuel trim B1 (0x06)"
+                android:checked="false" />
+
+            <CheckBox
+                android:id="@+id/cb0C"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Engine RPM (0x0C)"
+                android:checked="true" />
+
+            <CheckBox
+                android:id="@+id/cb0D"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Vehicle speed (0x0D)"
+                android:checked="true" />
+
+            <CheckBox
+                android:id="@+id/cb0E"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Timing advance (0x0E)"
+                android:checked="false" />
+
+            <CheckBox
+                android:id="@+id/cb0F"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Intake air temp (0x0F)"
+                android:checked="true" />
+
+            <CheckBox
+                android:id="@+id/cb10"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="MAF (0x10)"
+                android:checked="true" />
+
+            <CheckBox
+                android:id="@+id/cb11"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Throttle position (0x11)"
+                android:checked="true" />
+
+            <CheckBox
+                android:id="@+id/cb15"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="O2 sensor B1S2 (V &amp; STFT) (0x15)"
+                android:checked="false" />
+
+            <CheckBox
+                android:id="@+id/cb45"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Relative throttle position (0x45)"
+                android:checked="false" />
+
+            <CheckBox
+                android:id="@+id/cb47"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Ambient air temp (0x47)"
+                android:checked="true" />
+
+            <CheckBox
+                android:id="@+id/cb4C"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Commanded throttle actuator (0x4C)"
+                android:checked="false" />
+
+
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- Controls -->
     <LinearLayout
         android:orientation="horizontal"
         android:layout_width="match_parent"

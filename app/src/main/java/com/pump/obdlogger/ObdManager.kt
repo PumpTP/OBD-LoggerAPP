@@ -10,6 +10,7 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.util.UUID
 import java.util.regex.Pattern
+import kotlin.math.round
 
 class ObdManager(private val ctx: Context) {
 
@@ -23,7 +24,7 @@ class ObdManager(private val ctx: Context) {
     fun isConnected(): Boolean = (socket?.isConnected == true)
 
     fun connect(device: BluetoothDevice) {
-        // Try secure first, then insecure as fallback (helps with cheap ELMs)
+        // Try secure first, then insecure fallback
         val secure = device.createRfcommSocketToServiceRecord(sppUuid)
         runCatching { secure.connect() }.onSuccess {
             socket = secure
@@ -75,19 +76,11 @@ class ObdManager(private val ctx: Context) {
             .filter { it.isNotEmpty() && it != ">" && it.uppercase() != cmd.trim().uppercase() }
     }
 
-    // ---- ELM init for Honda City GM2 (your car: CAN 29-bit, 500k, functional 7DF) ----
+    // ---- Init for Honda City GM2 (29-bit CAN, 500k, 7DF functional) ----
     suspend fun initElmForHonda() {
         val initSeq = listOf(
-            "ATZ",     // reset
-            "ATE0",    // echo off
-            "ATL0",    // no linefeeds
-            "ATS0",    // no spaces
-            "ATH0",    // headers off
-            "ATSP7",   // CAN 29-bit / 500 kbps
-            "ATCAF1",  // CAN auto-format
-            "ATSH7DF", // functional header
-            "ATAL",    // allow long
-            "ATST0A"   // timeout
+            "ATZ", "ATE0", "ATL0", "ATS0", "ATH0",
+            "ATSP7", "ATCAF1", "ATSH7DF", "ATAL", "ATST0A"
         )
         for (cmd in initSeq) {
             sendRaw(cmd); delay(80)
@@ -118,7 +111,9 @@ class ObdManager(private val ctx: Context) {
         return false
     }
 
-    private fun requestPid(pidHex: Int): IntArray? {
+    // ===== Low-level request/parse =====
+
+    private fun requestPidRaw(pidHex: Int): IntArray? {
         val resp = sendRaw("01%02X".format(pidHex))
         return parsePositiveReply(resp, 0x41, pidHex)
     }
@@ -149,13 +144,44 @@ class ObdManager(private val ctx: Context) {
         return null
     }
 
-    fun readRpm(): Double? {
-        val data = requestPid(0x0C) ?: return null
-        return if (data.size >= 2) ((data[0] * 256) + data[1]) / 4.0 else null
+    // ===== Decoders for requested PIDs =====
+
+    // 0x03 Fuel system status (we return a human-readable string for system 1)
+    fun readFuelSystemStatusText(): String? {
+        val d = requestPidRaw(0x03) ?: return null
+        if (d.isEmpty()) return null
+        val a = d[0]
+        return when (a) {
+            0x01 -> "Open loop"
+            0x02 -> "Closed loop"
+            0x04 -> "Open loop (engine load)"
+            0x08 -> "Open loop (system fault)"
+            0x10 -> "Closed loop (O2/sensors)"
+            else -> "0x%02X".format(a)
+        }
     }
 
-    fun readCoolantC(): Double? {
-        val data = requestPid(0x05) ?: return null
-        return if (data.isNotEmpty()) (data[0] - 40).toDouble() else null
+    fun readCalcLoadPct(): Double? = requestPidRaw(0x04)?.let { if (it.isNotEmpty()) it[0] * 100.0 / 255.0 else null }
+    fun readCoolantC(): Double? = requestPidRaw(0x05)?.let { if (it.isNotEmpty()) (it[0] - 40).toDouble() else null }
+    fun readMapKpa(): Double? = requestPidRaw(0x0B)?.let { if (it.isNotEmpty()) it[0].toDouble() else null }
+    fun readStftB1Pct(): Double? = requestPidRaw(0x06)?.let { if (it.isNotEmpty()) (it[0] - 128) / 1.28 else null }
+    fun readRpm(): Double? = requestPidRaw(0x0C)?.let { if (it.size>=2) ((it[0]*256)+it[1]) / 4.0 else null }
+    fun readSpeedKmh(): Double? = requestPidRaw(0x0D)?.let { if (it.isNotEmpty()) it[0].toDouble() else null }
+    fun readTimingAdvanceDeg(): Double? = requestPidRaw(0x0E)?.let { if (it.isNotEmpty()) (it[0] / 2.0) - 64.0 else null }
+    fun readIatC(): Double? = requestPidRaw(0x0F)?.let { if (it.isNotEmpty()) (it[0] - 40).toDouble() else null }
+    fun readMafGps(): Double? = requestPidRaw(0x10)?.let { if (it.size>=2) ((it[0]*256)+it[1]) / 100.0 else null }
+    fun readThrottlePct(): Double? = requestPidRaw(0x11)?.let { if (it.isNotEmpty()) it[0] * 100.0 / 255.0 else null }
+
+    // 0x15 O2 Sensor B1S2 Voltage + STFT
+    fun readO2B1S2(): Pair<Double, Double>? {
+        val d = requestPidRaw(0x15) ?: return null
+        if (d.size < 2) return null
+        val v = d[0] / 200.0              // volts
+        val stft = (d[1] - 128) / 1.28    // %
+        return Pair(v, stft)
     }
+
+    fun readRelativeThrottlePct(): Double? = requestPidRaw(0x45)?.let { if (it.isNotEmpty()) it[0] * 100.0 / 255.0 else null }
+    fun readAmbientC(): Double? = requestPidRaw(0x47)?.let { if (it.isNotEmpty()) (it[0] - 40).toDouble() else null }
+    fun readCmdThrottlePct(): Double? = requestPidRaw(0x4C)?.let { if (it.isNotEmpty()) it[0] * 100.0 / 255.0 else null }
 }
