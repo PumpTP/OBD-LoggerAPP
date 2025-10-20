@@ -102,8 +102,6 @@ class MainActivity : AppCompatActivity() {
 
         val names = bonded.map { "${it.name} (${it.address})" }
         vb.spDevices.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, names)
-
-        // IMPORTANT: proper OnItemSelectedListener (no lambda)
         vb.spDevices.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
                 selectedDevice = bonded[position]
@@ -197,22 +195,13 @@ class MainActivity : AppCompatActivity() {
 
         pollJob = lifecycleScope.launch {
             vb.tvStatus.text = "Status: Initializing ELM…"
-
-            // >>> New: cross-car init <<<
-            val okInit = manager.initElmAuto()
-            if (!okInit) {
-                vb.tvStatus.text = "Status: No ECU response on common protocols"
-                vb.btnStart.isEnabled = true
-                return@launch
-            }
-
+            manager.initElmForHonda()
             val ok = manager.smokeTest()
             if (!ok) {
                 vb.tvStatus.text = "Status: ECU didn't acknowledge 0100"
                 vb.btnStart.isEnabled = true
                 return@launch
             }
-
             vb.tvStatus.text = "Status: Checking PID support…"
             manager.refreshSupportedPids01()
 
@@ -323,17 +312,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun openRealtime() {
-        val dev = selectedDevice
-        if (dev == null) {
-            toast("Pick your ELM327 device first")
-            return
-        }
         val i = Intent(this, RealtimeActivity::class.java)
         i.putExtra("pids", buildSelectedPids().toIntArray())
-        i.putExtra("bt_addr", dev.address)   // <--- pass device address
         startActivity(i)
     }
-
 
     override fun onDestroy() {
         super.onDestroy()
