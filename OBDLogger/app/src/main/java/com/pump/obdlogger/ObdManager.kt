@@ -24,7 +24,6 @@ class ObdManager(private val ctx: Context) {
     fun isConnected(): Boolean = (socket?.isConnected == true)
 
     fun connect(device: BluetoothDevice) {
-        // Try secure first, then insecure fallback
         val secure = device.createRfcommSocketToServiceRecord(sppUuid)
         runCatching { secure.connect() }.onSuccess {
             socket = secure
@@ -44,8 +43,7 @@ class ObdManager(private val ctx: Context) {
         input = null; output = null; socket = null
     }
 
-    // Bump timeout slightly for flaky ELMs/ECUs
-    private fun readUntilPrompt(timeoutMs: Long = 2200): String {
+    private fun readUntilPrompt(timeoutMs: Long = 1200): String {
         val ins = input ?: return ""
         val start = System.currentTimeMillis()
         val buf = StringBuilder()
@@ -81,7 +79,7 @@ class ObdManager(private val ctx: Context) {
             }
     }
 
-    // ---- Existing Honda-specific init (kept for reference/back-compat) ----
+    // ---- Init for Honda City GM2 (CAN 29-bit, 7DF functional) ----
     suspend fun initElmForHonda() {
         val initSeq = listOf(
             "ATZ", "ATE0", "ATL0", "ATS0", "ATH0",
@@ -93,40 +91,9 @@ class ObdManager(private val ctx: Context) {
         }
     }
 
-    // ---- New: Auto protocol init for broad compatibility ----
-    suspend fun initElmAuto(): Boolean {
-        // Base hygiene
-        val base = listOf("ATZ", "ATE0", "ATL0", "ATS0", "ATH1", "ATST0A")
-        for (c in base) {
-            sendRaw(c); delay(80)
-        }
-
-        // Try common stacks; stop on first 0100 success
-        val tries = listOf(
-            listOf("ATSP0"),                 // Auto
-            listOf("ATSP6", "ATSH7DF", "ATCAF1"), // CAN 11/500 (Mini/BMW etc.)
-            listOf("ATSP7", "ATSH7DF", "ATCAF1"), // CAN 29/500 (Honda/Toyota newer)
-            listOf("ATSP3"),                 // KWP2000 fast
-            listOf("ATSP5")                  // ISO 9141-2
-        )
-        for (seq in tries) {
-            for (c in seq) {
-                sendRaw(c); delay(80)
-            }
-            if (smokeTest()) return true
-            // Some dongles choke on CAF1; try CAF0 before giving up this attempt group
-            if (seq.contains("ATCAF1")) {
-                sendRaw("ATCAF0"); delay(60)
-                if (smokeTest()) return true
-            }
-        }
-        return false
-    }
-
     fun smokeTest(): Boolean {
         val resp = sendRaw("0100")
-        return hasPositive(resp, "01", "0x00".removePrefix("0x"))
-                || hasPositive(resp, "01", "00")
+        return hasPositive(resp, "01", "00")
     }
 
     private fun hasPositive(lines: List<String>, svcHex: String, pidHex: String): Boolean {
@@ -156,45 +123,27 @@ class ObdManager(private val ctx: Context) {
 
     private fun parsePositiveReply(lines: List<String>, posSvc: Int, pid: Int): IntArray? {
         val byteRegex = Pattern.compile("[0-9A-Fa-f]{2}")
-        var first: IntArray? = null
-        var from7E8: IntArray? = null
-
         for (ln in lines) {
-            // Extract all byte-like tokens
             val m = byteRegex.matcher(ln)
             val list = mutableListOf<Int>()
             while (m.find()) list.add(Integer.parseInt(m.group(), 16))
-
-            // Try generic scan
             for (i in 0 until list.size - 2) {
                 if (list[i] == posSvc && list[i + 1] == pid) {
-                    val rest = list.subList(i + 2, list.size).toIntArray()
-                    if (first == null) first = rest
+                    val rest = list.subList(i + 2, list.size)
+                    return rest.toIntArray()
                 }
             }
-
-            // If headers are visible, prefer engine ECU 7E8
-            val upper = ln.uppercase(Locale.US)
+            val s = ln.uppercase(Locale.US)
             val prefix = "41%02X".format(pid)
-            if (upper.contains("7E8") && upper.contains(prefix)) {
-                val idx = upper.indexOf(prefix)
-                val tail = upper.substring(idx + prefix.length)
+            if (s.startsWith(prefix)) {
+                val tail = s.removePrefix(prefix)
                 val mm = byteRegex.matcher(tail)
                 val rest = mutableListOf<Int>()
                 while (mm.find()) rest.add(Integer.parseInt(mm.group(), 16))
-                if (rest.isNotEmpty()) from7E8 = rest.toIntArray()
-            }
-
-            // Also accept plain "41xx..." lines
-            if (from7E8 == null && first == null && upper.startsWith(prefix)) {
-                val tail = upper.removePrefix(prefix)
-                val mm = byteRegex.matcher(tail)
-                val rest = mutableListOf<Int>()
-                while (mm.find()) rest.add(Integer.parseInt(mm.group(), 16))
-                if (rest.isNotEmpty()) first = rest.toIntArray()
+                if (rest.isNotEmpty()) return rest.toIntArray()
             }
         }
-        return from7E8 ?: first
+        return null
     }
 
     // ===== Supported PID cache (01 00/20/40) =====
@@ -283,7 +232,5 @@ class ObdManager(private val ctx: Context) {
         requestPidRaw(0x47)?.let { if (it.isNotEmpty()) (it[0] - 40).toDouble() else null }
 
     fun readCmdThrottlePct(): Double? =
-        requestPidRaw(0x4C)?.let {
-            if (it.isNotEmpty()) it[0] * 100.0 / 255.0 else null
-        }
+        requestPidRaw(0x4C)?.let { if (it.isNotEmpty()) it[0] * 100.0 / 255.0 else null }
 }
