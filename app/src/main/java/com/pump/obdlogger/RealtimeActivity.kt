@@ -25,7 +25,7 @@ class RealtimeActivity : AppCompatActivity() {
     private var btAddr: String? = null
     private var obd: ObdManager? = null
 
-    // simple UI elements (no XML)
+    // UI
     private lateinit var statusText: TextView
     private lateinit var container: LinearLayout
 
@@ -36,7 +36,7 @@ class RealtimeActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // ---- Build the UI programmatically ----
+        // ---- Simple programmatic UI (no XML) ----
         val root = ScrollView(this)
         val outer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -85,9 +85,9 @@ class RealtimeActivity : AppCompatActivity() {
         outer.addView(container)
         root.addView(outer)
         setContentView(root)
-        // ---------------------------------------
+        // ----------------------------------------
 
-        pids = intent.getIntArrayExtra("pids") ?: intArrayOf(0x0C, 0x05)
+        pids = intent.getIntArrayExtra("pids") ?: intArrayOf(0x0C, 0x05, 0x0D, 0x11, 0x04)
         btAddr = intent.getStringExtra("bt_addr")
 
         if (Build.VERSION.SDK_INT >= 31 &&
@@ -116,6 +116,25 @@ class RealtimeActivity : AppCompatActivity() {
         // Start polling
         pollJob?.cancel()
         pollJob = lifecycleScope.launch {
+            val periodMs = 200L // ~5 Hz
+
+            // ---- VIEWER MODE: logging is active elsewhere; don't open another socket ----
+            if (ObdShared.loggingActive) {
+                statusText.text = "Status: Live (viewer)"
+                while (isActive) {
+                    for (pid in pids) {
+                        val shown = when (pid) {
+                            0x03, 0x15 -> null // text/composite; not published by logger (skip)
+                            else -> ObdShared.read(pid)?.let { formatByPid(pid, it) } ?: "--"
+                        }
+                        if (shown != null) rows[pid]?.text = "${labelFor(pid)}: $shown"
+                    }
+                    delay(periodMs)
+                }
+                return@launch
+            }
+
+            // ---- ACTIVE MODE: logging is NOT running; we connect and poll ourselves ----
             val device = resolveDevice(btAddr)
             if (device == null) {
                 toast("No Bluetooth device address. Go back and connect first.")
@@ -146,11 +165,30 @@ class RealtimeActivity : AppCompatActivity() {
             }
 
             statusText.text = "Status: Live"
-            val periodMs = 200L // ~5 Hz
-
             while (isActive) {
                 for (pid in pids) {
-                    val valueText = readOne(pid) ?: "--"
+                    val valueText = when (pid) {
+                        0x03 -> obd?.readFuelSystemStatusText()
+                        0x04 -> obd?.readCalcLoadPct()?.fmt(2)
+                        0x05 -> obd?.readCoolantC()?.fmt(0)
+                        0x0B -> obd?.readMapKpa()?.fmt(0)
+                        0x06 -> obd?.readStftB1Pct()?.fmt(2)
+                        0x0C -> obd?.readRpm()?.fmt(0)
+                        0x0D -> obd?.readSpeedKmh()?.fmt(0)
+                        0x0E -> obd?.readTimingAdvanceDeg()?.fmt(1)
+                        0x0F -> obd?.readIatC()?.fmt(0)
+                        0x10 -> obd?.readMafGps()?.fmt(2)
+                        0x11 -> obd?.readThrottlePct()?.fmt(1)
+                        0x15 -> {
+                            val v = obd?.readO2B1S2()
+                            if (v == null) null else String.format(Locale.US, "%.3f V, %.2f %%", v.first, v.second)
+                        }
+                        0x45 -> obd?.readRelativeThrottlePct()?.fmt(1)
+                        0x47 -> obd?.readAmbientC()?.fmt(0)
+                        0x4C -> obd?.readCmdThrottlePct()?.fmt(1)
+                        else -> null
+                    } ?: "--"
+
                     rows[pid]?.text = "${labelFor(pid)}: $valueText"
                 }
                 delay(periodMs)
@@ -164,56 +202,45 @@ class RealtimeActivity : AppCompatActivity() {
         runCatching { obd?.close() }
     }
 
-    // Resolve BluetoothDevice from address
+    // --- helpers ---
+
     private fun resolveDevice(addr: String?): BluetoothDevice? {
         if (addr.isNullOrBlank()) return null
         val adapter = BluetoothAdapter.getDefaultAdapter() ?: return null
         return try { adapter.getRemoteDevice(addr) } catch (_: IllegalArgumentException) { null }
     }
 
-    // Labels
     private fun labelFor(pid: Int): String = when (pid) {
+        0x01 -> "Monitors (since clear)"
         0x03 -> "Fuel System"
         0x04 -> "Load %"
         0x05 -> "Coolant °C"
-        0x0A -> "Fuel Pressure kPa"
-        0x0B -> "MAP kPa"
         0x06 -> "STFT %"
+        0x0B -> "MAP kPa"
         0x0C -> "RPM"
         0x0D -> "Speed km/h"
         0x0E -> "Timing °"
         0x0F -> "IAT °C"
         0x10 -> "MAF g/s"
         0x11 -> "Throttle %"
+        0x13 -> "O2 sensors present"
         0x15 -> "O2 B1S2"
+        0x1F -> "Run time (s)"
+        0x21 -> "Dist with MIL on"
+        0x2E -> "Cmd EGR %"
+        0x30 -> "Warm-ups since clear"
+        0x31 -> "Dist since clear"
+        0x33 -> "Baro kPa"
+        0x34 -> "O2 S1 wide-range"
+        0x42 -> "ECU Voltage V"
+        0x43 -> "Absolute Load %"
+        0x44 -> "Lambda (cmd)"
         0x45 -> "Rel Throttle %"
         0x47 -> "Ambient °C"
+        0x49 -> "Accel Pedal D %"
+        0x4A -> "Accel Pedal E %"
         0x4C -> "Cmd Throttle %"
         else -> "PID %02X".format(pid)
-    }
-
-    // Read a single PID using ObdManager’s decoders
-    private fun readOne(pid: Int): String? = when (pid) {
-        0x03 -> obd?.readFuelSystemStatusText()
-        0x04 -> obd?.readCalcLoadPct()?.fmt(2)
-        0x05 -> obd?.readCoolantC()?.fmt(0)
-        0x0A -> null
-        0x0B -> obd?.readMapKpa()?.fmt(0)
-        0x06 -> obd?.readStftB1Pct()?.fmt(2)
-        0x0C -> obd?.readRpm()?.fmt(0)
-        0x0D -> obd?.readSpeedKmh()?.fmt(0)
-        0x0E -> obd?.readTimingAdvanceDeg()?.fmt(1)
-        0x0F -> obd?.readIatC()?.fmt(0)
-        0x10 -> obd?.readMafGps()?.fmt(2)
-        0x11 -> obd?.readThrottlePct()?.fmt(1)
-        0x15 -> {
-            val v = obd?.readO2B1S2() ?: return null
-            String.format(Locale.US, "%.3f V, %.2f %%", v.first, v.second)
-        }
-        0x45 -> obd?.readRelativeThrottlePct()?.fmt(1)
-        0x47 -> obd?.readAmbientC()?.fmt(0)
-        0x4C -> obd?.readCmdThrottlePct()?.fmt(1)
-        else -> null
     }
 
     private fun Double.fmt(dp: Int): String = when (dp) {
@@ -221,6 +248,12 @@ class RealtimeActivity : AppCompatActivity() {
         1 -> String.format(Locale.US, "%.1f", this)
         2 -> String.format(Locale.US, "%.2f", this)
         else -> String.format(Locale.US, "%.3f", this)
+    }
+
+    private fun formatByPid(pid: Int, v: Double): String = when (pid) {
+        0x04, 0x06, 0x10 -> String.format(Locale.US, "%.2f", v)
+        0x0E, 0x11, 0x45, 0x4C -> String.format(Locale.US, "%.1f", v)
+        else -> String.format(Locale.US, "%.0f", v)
     }
 
     private fun toast(msg: String) =
