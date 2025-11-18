@@ -53,6 +53,24 @@
             android:layout_marginTop="8dp" />
 
         <Button
+            android:id="@+id/btnSessions"
+            android:text="View Sessions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" />
+
+
+
+        <!-- NEW: Driver Evaluation toggle -->
+        <Switch
+            android:id="@+id/swDriverEval"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Driver Evaluation"
+            android:checked="true"
+            android:layout_marginTop="8dp" />
+
+        <Button
             android:id="@+id/btnShare"
             android:text="Share CSV"
             android:layout_width="match_parent"
@@ -65,6 +83,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp" />
+
+
 
         <!-- LOG PATH + TIME -->
         <TextView

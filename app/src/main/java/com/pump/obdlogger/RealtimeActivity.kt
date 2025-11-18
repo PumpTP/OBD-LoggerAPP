@@ -23,10 +23,13 @@ class RealtimeActivity : AppCompatActivity() {
     private var pollJob: Job? = null
     private var pids: IntArray = intArrayOf()
     private var btAddr: String? = null
+    private var startTime = 0L
+
     private var obd: ObdManager? = null
 
     // UI
     private lateinit var statusText: TextView
+    private lateinit var timerView: TextView
     private lateinit var container: LinearLayout
 
     private val permLauncher = registerForActivityResult(
@@ -65,6 +68,12 @@ class RealtimeActivity : AppCompatActivity() {
         headerRow.addView(statusText)
         headerRow.addView(btnClose)
 
+        timerView = TextView(this).apply {
+            textSize = 18f
+            text = "Time: 0s"
+        }
+        outer.addView(timerView)
+
         val divider = FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 1
@@ -87,8 +96,24 @@ class RealtimeActivity : AppCompatActivity() {
         setContentView(root)
         // ----------------------------------------
 
-        pids = intent.getIntArrayExtra("pids") ?: intArrayOf(0x0C, 0x05, 0x0D, 0x11, 0x04)
+        pids = intent.getIntArrayExtra("pids") ?: intArrayOf()
         btAddr = intent.getStringExtra("bt_addr")
+
+        // Ensure the three score rows are shown
+        if (pids.isNotEmpty()) {
+            val p = pids.toMutableList()
+            p += ObdShared.PID_ACCEL_SCORE
+            p += ObdShared.PID_FUEL_SCORE
+            p += ObdShared.PID_OVERALL
+            pids = p.toIntArray()
+        } else {
+            // If somehow empty, just show scores
+            pids = intArrayOf(
+                ObdShared.PID_ACCEL_SCORE,
+                ObdShared.PID_FUEL_SCORE,
+                ObdShared.PID_OVERALL
+            )
+        }
 
         if (Build.VERSION.SDK_INT >= 31 &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)
@@ -121,10 +146,14 @@ class RealtimeActivity : AppCompatActivity() {
             // ---- VIEWER MODE: logging is active elsewhere; don't open another socket ----
             if (ObdShared.loggingActive) {
                 statusText.text = "Status: Live (viewer)"
+                startTime = System.currentTimeMillis()          // initialize timer
                 while (isActive) {
+                    val elapsed = (System.currentTimeMillis() - startTime) / 1000
+                    timerView.text = "Time: ${elapsed}s"        // <---- ADD THIS LINE
+
                     for (pid in pids) {
                         val shown = when (pid) {
-                            0x03, 0x15 -> null // text/composite; not published by logger (skip)
+                            0x03, 0x15 -> null
                             else -> ObdShared.read(pid)?.let { formatByPid(pid, it) } ?: "--"
                         }
                         if (shown != null) rows[pid]?.text = "${labelFor(pid)}: $shown"
@@ -133,6 +162,7 @@ class RealtimeActivity : AppCompatActivity() {
                 }
                 return@launch
             }
+
 
             // ---- ACTIVE MODE: logging is NOT running; we connect and poll ourselves ----
             val device = resolveDevice(btAddr)
@@ -165,9 +195,24 @@ class RealtimeActivity : AppCompatActivity() {
             }
 
             statusText.text = "Status: Live"
+
+            startTime = System.currentTimeMillis()
+
             while (isActive) {
+
+                val elapsed = (System.currentTimeMillis() - startTime) / 1000
+
+                timerView.text = "Time: ${elapsed}s"
+
                 for (pid in pids) {
                     val valueText = when (pid) {
+                        // Note: the three score rows only update automatically in viewer mode
+                        // (when MainActivity is logging & publishing). In active mode here,
+                        // we don't run an evaluator to keep this lightweight.
+                        ObdShared.PID_ACCEL_SCORE -> ObdShared.read(pid)?.fmt(0)
+                        ObdShared.PID_FUEL_SCORE  -> ObdShared.read(pid)?.fmt(0)
+                        ObdShared.PID_OVERALL     -> ObdShared.read(pid)?.fmt(0)
+
                         0x03 -> obd?.readFuelSystemStatusText()
                         0x04 -> obd?.readCalcLoadPct()?.fmt(2)
                         0x05 -> obd?.readCoolantC()?.fmt(0)
@@ -193,6 +238,12 @@ class RealtimeActivity : AppCompatActivity() {
                 }
                 delay(periodMs)
             }
+        }
+        val addr = intent.getStringExtra("bt_addr")
+        if (addr.isNullOrBlank()) {
+            Toast.makeText(this, "No device address. Connect first.", Toast.LENGTH_SHORT).show()
+            finish()
+            return
         }
     }
 
@@ -240,6 +291,11 @@ class RealtimeActivity : AppCompatActivity() {
         0x49 -> "Accel Pedal D %"
         0x4A -> "Accel Pedal E %"
         0x4C -> "Cmd Throttle %"
+
+        ObdShared.PID_ACCEL_SCORE -> "Accel score"
+        ObdShared.PID_FUEL_SCORE  -> "Fuel score"
+        ObdShared.PID_OVERALL     -> "Driver score"
+
         else -> "PID %02X".format(pid)
     }
 
@@ -251,6 +307,10 @@ class RealtimeActivity : AppCompatActivity() {
     }
 
     private fun formatByPid(pid: Int, v: Double): String = when (pid) {
+        // render the three scores as whole numbers
+        ObdShared.PID_ACCEL_SCORE, ObdShared.PID_FUEL_SCORE, ObdShared.PID_OVERALL -> v.fmt(0)
+
+        // typical numeric formatting by PID
         0x04, 0x06, 0x10 -> String.format(Locale.US, "%.2f", v)
         0x0E, 0x11, 0x45, 0x4C -> String.format(Locale.US, "%.1f", v)
         else -> String.format(Locale.US, "%.0f", v)

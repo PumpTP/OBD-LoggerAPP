@@ -1,28 +1,26 @@
 package com.pump.obdlogger
 
-import java.util.concurrent.ConcurrentHashMap
-
-/** Shared state & last-known values when logging is active. */
 object ObdShared {
-    // Optional: expose the active manager for reuse (ONLY when not logging)
-    @Volatile var obd: ObdManager? = null
+    // basic live flags
+    @Volatile var loggingActive: Boolean = false
 
-    @Volatile private var _loggingActive: Boolean = false
-    val loggingActive: Boolean get() = _loggingActive
+    // “publish/subscribe” store for latest values
+    private val latest = mutableMapOf<Int, Double?>()
 
-    fun setLoggingActive(active: Boolean) { _loggingActive = active }
+    // PID keys we use in MainActivity / Realtime
+    const val PID_ENGINE_RPM = 0x0C
+    const val PID_VEHICLE_SPEED = 0x0D
+    const val PID_COOLANT_TEMP = 0x05
+    const val PID_MAF = 0x10
+    const val PID_THROTTLE = 0x11
 
-    // last numeric values by PID for viewer mode
-    private val lastValues = ConcurrentHashMap<Int, Double>()
+    // virtual “score” IDs
+    const val PID_ACCEL_SCORE = 0xF101
+    const val PID_FUEL_SCORE  = 0xF102
+    const val PID_OVERALL     = 0xF103
 
-    /** Publish a numeric value for a PID (called by MainActivity loop). */
-    fun publish(pid: Int, value: Double?) {
-        if (value != null) lastValues[pid] = value
+    @Synchronized fun publish(pid: Int, value: Double?) {
+        latest[pid] = value
     }
-
-    /** Read last numeric value (called by Realtime viewer). */
-    fun read(pid: Int): Double? = lastValues[pid]
-
-    /** Clear cached values (e.g., when stopping logging). */
-    fun reset() { lastValues.clear() }
+    @Synchronized fun read(pid: Int): Double? = latest[pid]
 }

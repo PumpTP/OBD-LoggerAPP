@@ -7,72 +7,165 @@ import android.bluetooth.BluetoothManager
 import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
+import android.view.View
 import android.view.WindowManager
-import android.widget.AdapterView
-import android.widget.ArrayAdapter
-import android.widget.Toast
+import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
-import com.pump.obdlogger.databinding.ActivityMainBinding
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var vb: ActivityMainBinding
+    // ===== UI refs (match activity_main.xml) =====
+    private lateinit var tvStatus: TextView
+    private lateinit var spDevices: Spinner
+    private lateinit var btnRefresh: Button
+    private lateinit var btnConnect: Button
+    private lateinit var btnStart: Button
+    private lateinit var btnStop: Button
+    private lateinit var btnSessions: Button
+    private lateinit var swDriverEval: Switch
+    private lateinit var btnShare: Button
+    private lateinit var btnRealtime: Button
+    private lateinit var tvElapsed: TextView
+    private lateinit var tvLogPath: TextView
 
+    // ===== Checkboxes =====
+    private lateinit var cb0C: CheckBox
+    private lateinit var cb05: CheckBox
+    private lateinit var cb03: CheckBox
+    private lateinit var cb04: CheckBox
+    private lateinit var cb0B: CheckBox
+    private lateinit var cb06: CheckBox
+    private lateinit var cb0D: CheckBox
+    private lateinit var cb0E: CheckBox
+    private lateinit var cb0F: CheckBox
+    private lateinit var cb10: CheckBox
+    private lateinit var cb11: CheckBox
+    private lateinit var cb15: CheckBox
+    private lateinit var cb45: CheckBox
+    private lateinit var cb47: CheckBox
+    private lateinit var cb4C: CheckBox
+
+    // ===== Bluetooth / OBD =====
     private val btAdapter: BluetoothAdapter?
         get() = getSystemService(BluetoothManager::class.java)?.adapter
-
     private var selectedDevice: BluetoothDevice? = null
     private var obd: ObdManager? = null
+
+    // ===== Logging =====
     private var pollJob: Job? = null
-    private var startTs: Long = 0L
+    private var startTsMs: Long = 0L
+    private var lastWrittenSec: Long = -1L
     private lateinit var csvLogger: CsvLogger
     private var currentLogFile: File? = null
-    private var selectedPids: List<Int> = emptyList()
+    private var evaluator: DriverEvaluator? = null
 
+    private lateinit var failurePredictor: FailurePredictor
+
+    private var enableDriverEval: Boolean = true
+
+    // PIDs: poll vs log
+    private var polledPids: Set<Int> = emptySet()   // user + core (for evaluation)
+    private var loggedPids: List<Int> = emptyList() // exactly what user wants to display/realtime
+    private val CORE_EVAL_PIDS = setOf(0x0C, 0x0D, 0x05, 0x10, 0x11) // rpm, speed, coolant, maf, throttle
+
+    // ===== Permissions =====
     private val permLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { grants ->
-        val granted = if (Build.VERSION.SDK_INT >= 31)
-            (grants[Manifest.permission.BLUETOOTH_CONNECT] == true)
-        else true
-        if (granted) refreshDevices() else {
-            toast("Bluetooth permission required")
-            vb.tvStatus.text = "Status: Permission denied"
-        }
+    ) {
+        // On grant, just refresh the device list
+        refreshDevices()
     }
 
+    // ===== Lifecycle =====
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        vb = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(vb.root)
+        setContentView(R.layout.activity_main)
+        bindViews()
 
-        vb.btnRefresh.setOnClickListener { ensureBtPermsThen { refreshDevices() } }
-        vb.btnConnect.setOnClickListener { ensureBtPermsThen { connectToSelected() } }
-        vb.btnStart.setOnClickListener { startLogging() }
-        vb.btnStop.setOnClickListener { stopLogging() }
-        vb.btnShare.setOnClickListener { shareCsv() }
-        vb.btnRealtime.setOnClickListener { openRealtime() }
+        failurePredictor = FailurePredictor(this)
+
+        enableDriverEval = swDriverEval.isChecked
+        swDriverEval.setOnCheckedChangeListener { _, isChecked -> enableDriverEval = isChecked }
+
+        btnRefresh.setOnClickListener { ensureBtPermsThen { refreshDevices() } }
+        btnConnect.setOnClickListener { ensureBtPermsThen { connectToSelected() } }
+        btnStart.setOnClickListener { startLogging() }
+        btnStop.setOnClickListener { stopLogging() }
+        btnShare.setOnClickListener { shareCsv() }
+        btnRealtime.setOnClickListener { openRealtime() }
+        btnSessions.setOnClickListener { showPastSessionsDialog() }
 
         ensureBtPermsThen { refreshDevices() }
+        setUiConnected(false)
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        runCatching { stopLogging() }
+        runCatching { obd?.close() }
+        setUiConnected(false)
+    }
+
+    // ===== View helpers =====
+    private fun bindViews() {
+        tvStatus = findViewById(R.id.tvStatus)
+        spDevices = findViewById(R.id.spDevices)
+        btnRefresh = findViewById(R.id.btnRefresh)
+        btnConnect = findViewById(R.id.btnConnect)
+        btnStart = findViewById(R.id.btnStart)
+        btnStop = findViewById(R.id.btnStop)
+        btnSessions = findViewById(R.id.btnSessions)
+        swDriverEval = findViewById(R.id.swDriverEval)
+        btnShare = findViewById(R.id.btnShare)
+        btnRealtime = findViewById(R.id.btnRealtime)
+        tvElapsed = findViewById(R.id.tvElapsed)
+        tvLogPath = findViewById(R.id.tvLogPath)
+
+        cb0C = findViewById(R.id.cb0C)
+        cb05 = findViewById(R.id.cb05)
+        cb03 = findViewById(R.id.cb03)
+        cb04 = findViewById(R.id.cb04)
+        cb0B = findViewById(R.id.cb0B)
+        cb06 = findViewById(R.id.cb06)
+        cb0D = findViewById(R.id.cb0D)
+        cb0E = findViewById(R.id.cb0E)
+        cb0F = findViewById(R.id.cb0F)
+        cb10 = findViewById(R.id.cb10)
+        cb11 = findViewById(R.id.cb11)
+        cb15 = findViewById(R.id.cb15)
+        cb45 = findViewById(R.id.cb45)
+        cb47 = findViewById(R.id.cb47)
+        cb4C = findViewById(R.id.cb4C)
+    }
+
+    private fun toast(msg: String) =
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+
+    private fun setUiConnected(connected: Boolean) {
+        btnConnect.isEnabled = !connected
+        btnStart.isEnabled = connected
+        btnRealtime.isEnabled = connected
+        btnShare.isEnabled = connected
+    }
+
+    // ===== Permissions =====
     private fun ensureBtPermsThen(block: () -> Unit) {
         if (Build.VERSION.SDK_INT >= 31) {
-            if (!hasPerm(Manifest.permission.BLUETOOTH_CONNECT)) {
+            val need = !hasPerm(Manifest.permission.BLUETOOTH_CONNECT)
+            if (need) {
                 permLauncher.launch(arrayOf(Manifest.permission.BLUETOOTH_CONNECT))
                 return
             }
@@ -80,248 +173,274 @@ class MainActivity : AppCompatActivity() {
         block()
     }
 
+    // Convert PID → CSV column name
+    private fun headerForPid(pid: Int): String = when (pid) {
+        0x03 -> "fuel_system_status"
+        0x04 -> "load_pct"
+        0x05 -> "coolant_c"
+        0x0B -> "map_kpa"
+        0x0C -> "rpm"
+        0x0D -> "speed_kmh"
+        0x0E -> "timing_deg"
+        0x0F -> "iat_c"
+        0x10 -> "maf_gps"
+        0x11 -> "throttle_pct"
+        0x15 -> "o2_b1s2_v_or_stft"
+        0x45 -> "rel_throttle_pct"
+        0x47 -> "ambient_c"
+        0x4C -> "cmd_throttle_pct"
+        else -> "pid_%02X".format(pid)
+    }
+
     private fun hasPerm(p: String) =
         ContextCompat.checkSelfPermission(this, p) == PackageManager.PERMISSION_GRANTED
 
+    // ===== Devices =====
     private fun refreshDevices() {
         val adapter = btAdapter ?: run { toast("Bluetooth not available"); return }
         if (Build.VERSION.SDK_INT >= 31 && !hasPerm(Manifest.permission.BLUETOOTH_CONNECT)) {
-            permLauncher.launch(arrayOf(Manifest.permission.BLUETOOTH_CONNECT)); return
+            permLauncher.launch(arrayOf(Manifest.permission.BLUETOOTH_CONNECT))
+            return
         }
-        if (!adapter.isEnabled) { toast("Enable Bluetooth first"); return }
-
-        val bonded = try { adapter.bondedDevices?.toList().orEmpty() }
-        catch (se: SecurityException) { toast("Grant Bluetooth permission"); return }
-
-        if (bonded.isEmpty()) {
-            vb.spDevices.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, listOf("No bonded devices"))
-            selectedDevice = null
-            vb.tvStatus.text = "Status: No paired devices"
+        if (!adapter.isEnabled) {
+            toast("Enable Bluetooth")
+            tvStatus.text = "Status: Bluetooth off"
             return
         }
 
-        val names = bonded.map { "${it.name} (${it.address})" }
-        vb.spDevices.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, names)
-
-        // IMPORTANT: proper OnItemSelectedListener (no lambda)
-        vb.spDevices.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
-                selectedDevice = bonded[position]
-            }
-            override fun onNothingSelected(parent: AdapterView<*>?) { selectedDevice = null }
+        val bonded = try { adapter.bondedDevices?.toList().orEmpty() }
+        catch (_: SecurityException) {
+            toast("Bluetooth permission required")
+            return
         }
-        vb.tvStatus.text = "Status: Pick your ELM327 and Connect"
+
+        if (bonded.isEmpty()) {
+            spDevices.adapter = ArrayAdapter(
+                this, android.R.layout.simple_spinner_dropdown_item,
+                listOf("No paired devices")
+            )
+            selectedDevice = null
+            tvStatus.text = "Status: No paired devices"
+            return
+        }
+
+        val labels = bonded.map { "${it.name} (${it.address})" }
+        spDevices.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
+        spDevices.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
+                selectedDevice = bonded[position]
+                tvStatus.text = "Status: ${labels[position]}"
+            }
+            override fun onNothingSelected(parent: AdapterView<*>) {
+                selectedDevice = null
+                tvStatus.text = "Status: No device selected"
+            }
+        }
+        spDevices.setSelection(0)
+        selectedDevice = bonded[0]
+        tvStatus.text = "Status: Pick a device"
     }
 
     private fun connectToSelected() {
-        val dev = selectedDevice ?: run { toast("Pick your ELM327 device first"); return }
-        if (Build.VERSION.SDK_INT >= 31 && !hasPerm(Manifest.permission.BLUETOOTH_CONNECT)) {
-            permLauncher.launch(arrayOf(Manifest.permission.BLUETOOTH_CONNECT)); return
-        }
-        vb.tvStatus.text = "Status: Connecting to ${dev.name}…"
+        val dev = selectedDevice ?: run { toast("Pick your device first"); return }
+        tvStatus.text = "Status: Connecting…"
+        btnConnect.isEnabled = false
+
         lifecycleScope.launch {
-            runCatching {
-                if (obd?.isConnected() == true) obd?.close()
-                obd = ObdManager(this@MainActivity).also { it.connect(dev) }
-                ObdShared.obd = obd
-            }.onSuccess {
-                vb.tvStatus.text = "Status: Connected to ${dev.name}"
-            }.onFailure {
-                vb.tvStatus.text = "Status: Connect failed: ${it.message}"
-                toast("Connect failed: ${it.message}")
+            val ok = withContext(Dispatchers.IO) {
+                try {
+                    if (obd == null) obd = ObdManager(this@MainActivity)
+                    obd!!.connect(dev)
+                    obd!!.initElmAuto() || obd!!.smokeTest()
+                } catch (_: Throwable) { false }
+            }
+            if (ok) {
+                tvStatus.text = "Status: Connected"
+                setUiConnected(true)
+            } else {
+                tvStatus.text = "Status: Connect failed"
+                setUiConnected(false)
+                btnConnect.isEnabled = true
             }
         }
     }
 
-    private fun buildSelectedPids(): List<Int> {
-        val p = mutableListOf<Int>()
-        // DO NOT include 0x22 anywhere.
-        if (vb.cb03.isChecked) p += 0x03
-        if (vb.cb04.isChecked) p += 0x04
-        if (vb.cb05.isChecked) p += 0x05
-        if (vb.cb0B.isChecked) p += 0x0B
-        if (vb.cb06.isChecked) p += 0x06
-        if (vb.cb0C.isChecked) p += 0x0C
-        if (vb.cb0D.isChecked) p += 0x0D
-        if (vb.cb0E.isChecked) p += 0x0E
-        if (vb.cb0F.isChecked) p += 0x0F
-        if (vb.cb10.isChecked) p += 0x10
-        if (vb.cb11.isChecked) p += 0x11
-        if (vb.cb15.isChecked) p += 0x15
-        if (vb.cb45.isChecked) p += 0x45
-        if (vb.cb47.isChecked) p += 0x47
-        if (vb.cb4C.isChecked) p += 0x4C
-        return p
+    private fun mustBeConnected(): Boolean {
+        val ok = obd?.isConnected() == true
+        if (!ok) toast("Connect to your OBD adapter first")
+        return ok
     }
 
-    private fun headerForPid(pid: Int): List<String> = when (pid) {
-        0x03 -> listOf("fuel_status")
-        0x04 -> listOf("calc_load_%")
-        0x05 -> listOf("coolant_C")
-        0x0A -> listOf("fuel_pressure_kPa")
-        0x0B -> listOf("map_kPa")
-        0x06 -> listOf("stft_b1_%")
-        0x0C -> listOf("rpm")
-        0x0D -> listOf("speed_kmh")
-        0x0E -> listOf("timing_adv_deg")
-        0x0F -> listOf("iat_C")
-        0x10 -> listOf("maf_gps")
-        0x11 -> listOf("throttle_%")
-        0x15 -> listOf("o2_b1s2_V","o2_b1s2_stft_%")
-        0x45 -> listOf("rel_throttle_%")
-        0x47 -> listOf("ambient_C")
-        0x4C -> listOf("cmd_throttle_%")
-        else -> listOf("pid_%02X".format(pid))
+    // ===== PID selection (matches your XML ids) =====
+    private fun buildSelectedPidsFromUi(): Set<Int> {
+        val map = listOf(
+            cb0C to 0x0C, cb05 to 0x05, cb03 to 0x03, cb04 to 0x04, cb0B to 0x0B,
+            cb06 to 0x06, cb0D to 0x0D, cb0E to 0x0E, cb0F to 0x0F, cb10 to 0x10,
+            cb11 to 0x11, cb15 to 0x15, cb45 to 0x45, cb47 to 0x47, cb4C to 0x4C
+        )
+        val out = mutableSetOf<Int>()
+        for ((cb, pid) in map) if (cb.isChecked) out += pid
+        if (out.isEmpty()) out += setOf(0x0C, 0x05) // fallback: RPM + Coolant
+        return out
     }
 
-
-    private fun Double.fmt0() = String.format(Locale.US, "%.0f", this)
-    private fun Double.fmt1() = String.format(Locale.US, "%.1f", this)
-    private fun Double.fmt2() = String.format(Locale.US, "%.2f", this)
-    private fun Double.fmt3() = String.format(Locale.US, "%.3f", this)
-
-    private fun decodeForCsv(manager: ObdManager, pid: Int): List<String> = when (pid) {
-        0x03 -> listOf(manager.readFuelSystemStatusText() ?: "")
-        0x04 -> listOf(manager.readCalcLoadPct()?.fmt2() ?: "")
-        0x05 -> listOf(manager.readCoolantC()?.fmt0() ?: "")
-        0x0A -> listOf("") // most ECUs don’t support; leave blank
-        0x0B -> listOf(manager.readMapKpa()?.fmt0() ?: "")
-        0x06 -> listOf(manager.readStftB1Pct()?.fmt2() ?: "")
-        0x0C -> listOf(manager.readRpm()?.fmt0() ?: "")
-        0x0D -> listOf(manager.readSpeedKmh()?.fmt0() ?: "")
-        0x0E -> listOf(manager.readTimingAdvanceDeg()?.fmt1() ?: "")
-        0x0F -> listOf(manager.readIatC()?.fmt0() ?: "")
-        0x10 -> listOf(manager.readMafGps()?.fmt2() ?: "")
-        0x11 -> listOf(manager.readThrottlePct()?.fmt1() ?: "")
-        0x15 -> {
-            val v = manager.readO2B1S2()
-            if (v == null) listOf("", "") else listOf(v.first.fmt3(), v.second.fmt2())
-        }
-        0x45 -> listOf(manager.readRelativeThrottlePct()?.fmt1() ?: "")
-        0x47 -> listOf(manager.readAmbientC()?.fmt0() ?: "")
-        0x4C -> listOf(manager.readCmdThrottlePct()?.fmt1() ?: "")
-        else -> listOf("")
-    }
-
+    // ===== Logging =====
     private fun startLogging() {
-        val manager = obd ?: run { toast("Connect first"); return }
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        if (pollJob != null) return
+        if (!mustBeConnected()) return
+        if (pollJob != null) { toast("Already logging"); return }
 
-        selectedPids = buildSelectedPids()
-        if (selectedPids.isEmpty()) { toast("Select at least one data item to log."); return }
+        val userSelected = buildSelectedPidsFromUi()
+        polledPids = (userSelected + CORE_EVAL_PIDS)
+        loggedPids = userSelected.toList()
+        lastWrittenSec = -1L
 
-        val dir = File(getExternalFilesDir(null), "obd").apply { mkdirs() }
-        val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-        val file = File(dir, "obd_log_$ts.csv")
-        currentLogFile = file
-        csvLogger = CsvLogger(file)
+        startTsMs = System.currentTimeMillis()
+        tvElapsed.text = "t = 0.0 s"
 
-        val header = mutableListOf("timestamp_s")
-        selectedPids.forEach { header += headerForPid(it) }
+        // CSV setup
+        val ts = SimpleDateFormat("dd-MM-yyyy_HH-mm-ss", Locale.US).format(Date(startTsMs))
+        val dir = File(getExternalFilesDir(null), "logs").apply { mkdirs() }
+        currentLogFile = File(dir, "obd_$ts.csv")
+
+        csvLogger = CsvLogger(currentLogFile!!)   // ← initialize before using it
+
+        val header = buildList {
+            add("time_s")
+            for (pid in loggedPids) add(headerForPid(pid))
+        }
         csvLogger.writeHeader(header)
+        tvLogPath.text = "Log: ${currentLogFile!!.absolutePath}"
 
-        vb.tvLogPath.text = "Log: ${file.absolutePath}"
-        vb.btnStart.isEnabled = false
-        startTs = System.currentTimeMillis()
 
-        pollJob = lifecycleScope.launch {
-            vb.tvStatus.text = "Status: Initializing ELM…"
+        evaluator = if (enableDriverEval) DriverEvaluator() else null
 
-            // Cross-car init
-            val okInit = manager.initElmAuto()
-            if (!okInit) {
-                vb.tvStatus.text = "Status: No ECU response on common protocols"
-                vb.btnStart.isEnabled = true
-                return@launch
-            }
+        ObdShared.loggingActive = true
+        btnStart.isEnabled = false
+        tvStatus.text = "Status: Logging…"
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-            val ok = manager.smokeTest()
-            if (!ok) {
-                vb.tvStatus.text = "Status: ECU didn't acknowledge 0100"
-                vb.btnStart.isEnabled = true
-                return@launch
-            }
-
-            vb.tvStatus.text = "Status: Checking PID support…"
-            manager.refreshSupportedPids01()
-
-            val (kept, dropped) = selectedPids.partition { manager.isPidSupported01(it) }
-            if (kept.isEmpty()) {
-                vb.tvStatus.text = "Status: None of the selected PIDs are supported."
-                vb.btnStart.isEnabled = true
-                return@launch
-            }
-            if (dropped.isNotEmpty()) {
-                toast("Unsupported skipped: " + dropped.joinToString { "0x%02X".format(it) })
-            }
-            selectedPids = kept
-
-            // Enable viewer mode for RealtimeActivity
-            ObdShared.setLoggingActive(true)
-
-            vb.tvStatus.text = "Status: Logging…"
-            val hz = 5
-            val periodMs = 1000L / hz
-
-            while (true) {
-                val t = (System.currentTimeMillis() - startTs) / 1000.0
-                vb.tvElapsed.text = "t = ${"%.1f".format(t)} s"
-
-                val row = mutableListOf("%.2f".format(t))
-
-                selectedPids.forEach { pid ->
-                    when (pid) {
-                        0x03 -> {
-                            val s = manager.readFuelSystemStatusText()
-                            row += (s ?: "")
+        pollJob = lifecycleScope.launch(Dispatchers.Main) {
+            val periodMs = 200L
+            while (isActive && ObdShared.loggingActive) {
+                val absNow = System.currentTimeMillis()
+                val elapsedSec = (absNow - startTsMs) / 1000
+                try {
+                    // Read required PIDs
+                    val map = mutableMapOf<Int, Double?>()
+                    for (pid in polledPids) {
+                        val v = when (pid) {
+                            0x03 -> null
+                            0x04 -> withContext(Dispatchers.IO) { obd!!.readCalcLoadPct() }
+                            0x05 -> withContext(Dispatchers.IO) { obd!!.readCoolantC() }
+                            0x0B -> withContext(Dispatchers.IO) { obd!!.readMapKpa() }
+                            0x0C -> withContext(Dispatchers.IO) { obd!!.readRpm() }
+                            0x0D -> withContext(Dispatchers.IO) { obd!!.readSpeedKmh() }
+                            0x0F -> withContext(Dispatchers.IO) { obd!!.readIatC() }
+                            0x10 -> withContext(Dispatchers.IO) { obd!!.readMafGps() }
+                            0x11 -> withContext(Dispatchers.IO) { obd!!.readThrottlePct() }
+                            0x45 -> withContext(Dispatchers.IO) { obd!!.readRelativeThrottlePct() }
+                            0x47 -> withContext(Dispatchers.IO) { obd!!.readAmbientC() }
+                            0x4C -> withContext(Dispatchers.IO) { obd!!.readCmdThrottlePct() }
+                            else -> null
                         }
-                        0x04 -> { val v = manager.readCalcLoadPct();        row += v?.let { "%.2f".format(it) } ?: ""; ObdShared.publish(0x04, v) }
-                        0x05 -> { val v = manager.readCoolantC();           row += v?.let { "%.0f".format(it) } ?: ""; ObdShared.publish(0x05, v) }
-                        0x0B -> { val v = manager.readMapKpa();             row += v?.let { "%.0f".format(it) } ?: ""; ObdShared.publish(0x0B, v) }
-                        0x06 -> { val v = manager.readStftB1Pct();          row += v?.let { "%.2f".format(it) } ?: ""; ObdShared.publish(0x06, v) }
-                        0x0C -> { val v = manager.readRpm();                row += v?.let { "%.0f".format(it) } ?: ""; ObdShared.publish(0x0C, v) }
-                        0x0D -> { val v = manager.readSpeedKmh();           row += v?.let { "%.0f".format(it) } ?: ""; ObdShared.publish(0x0D, v) }
-                        0x0E -> { val v = manager.readTimingAdvanceDeg();   row += v?.let { "%.1f".format(it) } ?: ""; ObdShared.publish(0x0E, v) }
-                        0x0F -> { val v = manager.readIatC();               row += v?.let { "%.0f".format(it) } ?: ""; ObdShared.publish(0x0F, v) }
-                        0x10 -> { val v = manager.readMafGps();             row += v?.let { "%.2f".format(it) } ?: ""; ObdShared.publish(0x10, v) }
-                        0x11 -> { val v = manager.readThrottlePct();        row += v?.let { "%.1f".format(it) } ?: ""; ObdShared.publish(0x11, v) }
-                        0x15 -> {
-                            val v = manager.readO2B1S2()
-                            if (v == null) { row += ""; row += "" } else { row += "%.3f".format(v.first); row += "%.2f".format(v.second) }
-                        }
-                        0x45 -> { val v = manager.readRelativeThrottlePct(); row += v?.let { "%.1f".format(it) } ?: ""; ObdShared.publish(0x45, v) }
-                        0x47 -> { val v = manager.readAmbientC();           row += v?.let { "%.0f".format(it) } ?: ""; ObdShared.publish(0x47, v) }
-                        0x4C -> { val v = manager.readCmdThrottlePct();     row += v?.let { "%.1f".format(it) } ?: ""; ObdShared.publish(0x4C, v) }
-                        else -> row += ""
+                        map[pid] = v
                     }
+
+                    // Publish for viewer
+                    ObdShared.publish(ObdShared.PID_ENGINE_RPM,   map[0x0C])
+                    ObdShared.publish(ObdShared.PID_VEHICLE_SPEED, map[0x0D])
+                    ObdShared.publish(ObdShared.PID_COOLANT_TEMP,  map[0x05])
+                    ObdShared.publish(ObdShared.PID_MAF,           map[0x10])
+                    ObdShared.publish(ObdShared.PID_THROTTLE,      map[0x11])
+
+                    // Evaluate scores
+                    evaluator?.onSample(
+                        DriverEvaluator.Sample(
+                            timestampMs = absNow,
+                            speedKmh    = map[0x0D],
+                            rpm         = map[0x0C],
+                            throttlePct = map[0x11],
+                            mafGps      = map[0x10],
+                            coolantC    = map[0x05]
+                        )
+                    )?.let { (a,f,o) ->
+                        ObdShared.publish(ObdShared.PID_ACCEL_SCORE, a)
+                        ObdShared.publish(ObdShared.PID_FUEL_SCORE,  f)
+                        ObdShared.publish(ObdShared.PID_OVERALL,     o)
+                    }
+
+                    // CSV once per second: seconds + ISO
+                    if (elapsedSec != lastWrittenSec) {
+                        val row = ArrayList<Any?>(1 + loggedPids.size)
+                        row.add(elapsedSec)                      // time_s = elapsed seconds from start (0,1,2,…)
+                        for (pid in loggedPids) row.add(map[pid] ?: "")
+                        csvLogger.writeRow(row)
+                        lastWrittenSec = elapsedSec
+                    }
+
+                    // UI
+                    val failure = failurePredictor.addSample(
+                        floatArrayOf(
+                            (map[0x0C] ?: 0.0).toFloat(),
+                            (map[0x0D] ?: 0.0).toFloat(),
+                            (map[0x05] ?: 0.0).toFloat()
+                        )
+                    )
+
+                    tvStatus.text = if (failure != null) {
+                        "Status: ${"%.0f".format(map[0x0D] ?: 0.0)} km/h, " +
+                                "${"%.0f".format(map[0x0C] ?: 0.0)} rpm, " +
+                                "fail=${"%.3f".format(failure[0])}"
+                    } else {
+                        "Status: ${"%.0f".format(map[0x0D] ?: 0.0)} km/h, " +
+                                "${"%.0f".format(map[0x0C] ?: 0.0)} rpm"
+                    }
+
+                    tvElapsed.text = "t = ${"%.1f".format((absNow - startTsMs) / 1000.0)} s"
+
+                } catch (e: CancellationException) {
+                    break
+                } catch (e: Exception) {
+                    tvStatus.text = "Status: Read error: ${e.message}"
                 }
-
-                csvLogger.writeRow(row)
-                csvLogger.error()?.let { err -> vb.tvStatus.text = "Status: Write error: $err" }
-
                 delay(periodMs)
             }
         }
     }
 
-
     private fun stopLogging() {
         pollJob?.cancel()
         pollJob = null
-        vb.btnStart.isEnabled = true
-        vb.tvStatus.text = "Status: Saving…"
-        if (::csvLogger.isInitialized) csvLogger.close()
+        ObdShared.loggingActive = false
+        btnStart.isEnabled = true
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        currentLogFile?.let { src ->
-            runCatching { saveCopyToDownloads(src) }
-                .onSuccess { vb.tvStatus.text = "Status: Saved to Downloads/OBD" }
-                .onFailure { e -> vb.tvStatus.text = "Status: Save failed: ${e.message}" }
-        } ?: run { vb.tvStatus.text = "Status: Ready" }
+        if (::csvLogger.isInitialized) runCatching { csvLogger.close() }
+
+        // store session
+        val accel = ObdShared.read(ObdShared.PID_ACCEL_SCORE)
+        val fuel  = ObdShared.read(ObdShared.PID_FUEL_SCORE)
+        val total = ObdShared.read(ObdShared.PID_OVERALL)
+
+        fun toPctInt(x: Double?): Int? = x?.let { it.coerceIn(0.0, 100.0).toInt() }
+
+        val session = DriverSession(
+            id = UUID.randomUUID().toString(),
+            startTimeSec = startTsMs / 1000,
+            endTimeSec = System.currentTimeMillis() / 1000,
+            csvPath = currentLogFile?.absolutePath,
+            accelScore = toPctInt(accel),
+            fuelScore = toPctInt(fuel),
+            overallScore = toPctInt(total)
+        )
+        SessionStore(this).save(session)
+
+        // optional copy to Downloads/OBD
+        currentLogFile?.let { runCatching { saveCopyToDownloads(it) } }
+        tvStatus.text = "Status: Ready"
     }
 
-    private fun saveCopyToDownloads(src: File): android.net.Uri {
+    private fun saveCopyToDownloads(src: File): Uri {
         val resolver = contentResolver
         val values = ContentValues().apply {
             put(MediaStore.Downloads.DISPLAY_NAME, src.name)
@@ -334,8 +453,7 @@ class MainActivity : AppCompatActivity() {
         resolver.openOutputStream(uri, "w").use { out ->
             src.inputStream().use { it.copyTo(out!!) }
         }
-        values.clear()
-        values.put(MediaStore.Downloads.IS_PENDING, 0)
+        values.clear(); values.put(MediaStore.Downloads.IS_PENDING, 0)
         resolver.update(uri, values, null, null)
         return uri
     }
@@ -355,24 +473,49 @@ class MainActivity : AppCompatActivity() {
         startActivity(Intent.createChooser(intent, "Share OBD CSV"))
     }
 
-    private fun openRealtime() {
-        val dev = selectedDevice
-        if (dev == null) {
-            toast("Pick your ELM327 device first")
+    // ===== Past Sessions =====
+    private fun showPastSessionsDialog() {
+        val store = SessionStore(this)
+        val sessions = store.list()
+        if (sessions.isEmpty()) {
+            toast("No past sessions yet")
             return
         }
+        val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+        val items = sessions.map { s ->
+            val startStr = fmt.format(Date(s.startTimeSec * 1000L))
+            val endStr = fmt.format(Date(s.endTimeSec * 1000L))
+            val overall = s.overallScore?.toString() ?: "—"
+            "$startStr → $endStr  (Score: $overall)"
+        }
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Past Driving Sessions")
+            .setItems(items.toTypedArray()) { _, idx ->
+                val sel = sessions[idx]
+                sel.csvPath?.let { path ->
+                    val f = File(path)
+                    if (f.exists()) {
+                        val uri = FileProvider.getUriForFile(this, "${packageName}.fileprovider", f)
+                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                            setDataAndType(uri, "text/csv")
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        startActivity(Intent.createChooser(intent, "Open CSV with…"))
+                    } else toast("CSV not found")
+                } ?: toast("No CSV saved")
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    // ===== Realtime =====
+    private fun openRealtime() {
+        if (!mustBeConnected()) return
+        val dev = selectedDevice ?: run { toast("Pick your device"); return }
+        val userSelected = buildSelectedPidsFromUi()
         val i = Intent(this, RealtimeActivity::class.java)
-        i.putExtra("pids", buildSelectedPids().toIntArray())
-        i.putExtra("bt_addr", dev.address)   // <--- pass device address
+        i.putExtra("pids", userSelected.toIntArray())  // Realtime adds the 3 score rows itself
+        i.putExtra("bt_addr", dev.address)
         startActivity(i)
     }
-
-
-    override fun onDestroy() {
-        super.onDestroy()
-        stopLogging()
-        obd?.close()
-    }
-
-    private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
 }
