@@ -1,21 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:orientation="horizontal"
-    android:padding="8dp"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content">
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:layout_margin="4dp"
+    android:background="@android:color/darker_gray">
 
     <TextView
         android:id="@+id/tvLabel"
-        android:text="Label"
-        android:textStyle="bold"
-        android:layout_width="0dp"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_weight="1" />
+        android:text="Engine load"
+        android:textSize="12sp" />
 
     <TextView
         android:id="@+id/tvValue"
-        android:text="--"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content" />
+        android:layout_height="wrap_content"
+        android:text="18 %"
+        android:textStyle="bold"
+        android:textSize="20sp" />
+
 </LinearLayout>

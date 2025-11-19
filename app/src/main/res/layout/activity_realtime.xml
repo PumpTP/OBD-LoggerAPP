@@ -5,16 +5,28 @@
     android:orientation="vertical"
     android:padding="16dp">
 
-    <Button
-        android:id="@+id/btnBack"
+    <TextView
+        android:id="@+id/tvLiveTitle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Back" />
+        android:text="Live gauges"
+        android:textSize="20sp"
+        android:textStyle="bold" />
 
-    <ListView
-        android:id="@+id/listLive"
+    <TextView
+        android:id="@+id/tvLiveSubtitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Favorites"
+        android:textSize="14sp"
+        android:layout_marginTop="4dp" />
+
+    <!-- RecyclerView for metric tiles -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvLiveMetrics"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_marginTop="12dp"
         android:layout_weight="1" />
+
 </LinearLayout>
