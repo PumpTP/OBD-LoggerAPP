@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:padding="16dp">
@@ -17,18 +18,116 @@
             android:textStyle="bold"
             android:paddingBottom="8dp" />
 
-        <Button
-            android:id="@+id/btnGeneralSettings"
+<!--        <Button-->
+<!--            android:id="@+id/btnGeneralSettings"-->
+<!--            android:layout_width="match_parent"-->
+<!--            android:layout_height="wrap_content"-->
+<!--            android:text="General" />-->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="General" />
+            android:orientation="vertical">
 
-        <Button
+            <!-- Temperature units -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Temperature unit"
+                android:textStyle="bold"
+                android:layout_marginTop="8dp" />
+
+            <RadioGroup
+                android:id="@+id/rgTempUnit"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <RadioButton
+                    android:id="@+id/rbTempC"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="°C" />
+
+                <RadioButton
+                    android:id="@+id/rbTempF"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="°F"
+                    android:layout_marginStart="16dp" />
+            </RadioGroup>
+
+            <!-- Distance units -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Distance unit"
+                android:textStyle="bold"
+                android:layout_marginTop="16dp" />
+
+            <RadioGroup
+                android:id="@+id/rgDistanceUnit"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <RadioButton
+                    android:id="@+id/rbKm"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="km" />
+
+                <RadioButton
+                    android:id="@+id/rbMi"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="mi"
+                    android:layout_marginStart="16dp" />
+            </RadioGroup>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSaveGeneral"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Save"
+                android:layout_marginTop="24dp"
+                app:backgroundTint="#E8E8E8"
+                app:cornerRadius="12dp"
+                app:strokeWidth="0dp"
+                android:elevation="6dp"
+                android:translationZ="4dp"
+                android:stateListAnimator="@null"
+                android:textColor="#000000"
+                android:textStyle="normal"
+                android:textSize="16sp"
+                android:gravity="center" />
+
+
+
+        </LinearLayout>
+
+<!--        <Button-->
+<!--            android:id="@+id/btnPidSettings"-->
+<!--            android:layout_width="match_parent"-->
+<!--            android:layout_height="wrap_content"-->
+<!--            android:text="PIDs"-->
+<!--            android:layout_marginTop="12dp" />-->
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btnPidSettings"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="PIDs"
-            android:layout_marginTop="12dp" />
+            android:layout_marginTop="24dp"
+            app:backgroundTint="#E8E8E8"
+            app:cornerRadius="12dp"
+            app:strokeWidth="0dp"
+            android:elevation="6dp"
+            android:translationZ="4dp"
+            android:stateListAnimator="@null"
+            android:textColor="#000000"
+            android:textStyle="normal"
+            android:textSize="16sp"
+            android:gravity="center" />
 
     </LinearLayout>
 </ScrollView>

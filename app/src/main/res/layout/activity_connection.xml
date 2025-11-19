@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:orientation="vertical"
     android:padding="16dp"
     android:layout_width="match_parent"
@@ -20,17 +21,49 @@
         android:layout_weight="1"
         android:choiceMode="singleChoice"/>
 
-    <Button
+<!--    <Button-->
+<!--        android:id="@+id/btnScan"-->
+<!--        android:text="Scan Devices"-->
+<!--        android:layout_width="match_parent"-->
+<!--        android:layout_height="wrap_content"-->
+<!--        android:layout_marginTop="8dp"/>-->
+    <com.google.android.material.button.MaterialButton
         android:id="@+id/btnScan"
-        android:text="Scan Devices"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"/>
+        android:layout_rowWeight="1"
+        android:layout_columnWeight="1"
+        android:elevation="8dp"
+        android:gravity="center"
+        android:stateListAnimator="@null"
+        android:text="Scan devices"
+        android:textColor="#000"
+        android:textSize="16sp"
+        android:textStyle="normal"
+        android:translationZ="4dp"
+        app:backgroundTint="#FFFFFF"
+        app:cornerRadius="12dp" />
 
-    <Button
+    <com.google.android.material.button.MaterialButton
         android:id="@+id/btnConnect"
-        android:text="Connect"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"/>
+        android:layout_rowWeight="1"
+        android:layout_columnWeight="1"
+        android:elevation="8dp"
+        android:gravity="center"
+        android:stateListAnimator="@null"
+        android:text="Connect"
+        android:textColor="#000"
+        android:textSize="16sp"
+        android:textStyle="normal"
+        android:translationZ="4dp"
+        app:backgroundTint="#FFFFFF"
+        app:cornerRadius="12dp" />
+<!--    <Button-->
+<!--        android:id="@+id/btnConnect"-->
+<!--        android:text="Connect"-->
+<!--        android:layout_width="match_parent"-->
+<!--        android:layout_height="wrap_content"-->
+<!--        android:layout_marginTop="8dp"/>-->
 </LinearLayout>

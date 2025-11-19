@@ -12,14 +12,15 @@
         android:layout_height="wrap_content">
 
         <!-- App title -->
-        <TextView
+        <ImageView
             android:id="@+id/tvAppTitle"
-            android:layout_width="wrap_content"
+            android:layout_width="250dp"
             android:layout_height="wrap_content"
-            android:text="OBDpredict"
-            android:textSize="24sp"
-            android:textStyle="bold"
+            android:src="@drawable/ic_obd_logo"
+            android:contentDescription="App logo"
+            android:adjustViewBounds="true"
             android:paddingBottom="8dp" />
+
 
         <!-- Connection status -->
 <!--        <TextView-->
@@ -43,7 +44,10 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:padding="16dp"
-            android:layout_marginTop="16dp" >
+            android:layout_marginTop="16dp"
+            android:background="@drawable/car_status_gradient"
+            android:elevation="4dp">
+
 
             <TextView
                 android:id="@+id/tvCarName"
@@ -121,7 +125,8 @@
                         android:id="@+id/tvCoolant"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="-- °C"                        android:textSize="18sp"
+                        android:text="-- °C"
+                        android:textSize="18sp"
                         android:textStyle="bold" />
                 </LinearLayout>
             </LinearLayout>

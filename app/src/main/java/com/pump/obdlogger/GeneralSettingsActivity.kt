@@ -22,7 +22,7 @@ class GeneralSettingsActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_general_settings)
+        setContentView(R.layout.activity_settings)
 
         bindViews()
         loadUnits()

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:padding="16dp">
@@ -32,11 +33,29 @@
             android:padding="8dp"
             android:background="@android:color/background_light" />
 
-        <Button
+<!--        <Button-->
+<!--            android:id="@+id/btnSavePids"-->
+<!--            android:layout_width="match_parent"-->
+<!--            android:layout_height="wrap_content"-->
+<!--            android:text="Save"-->
+<!--            android:layout_marginTop="16dp" />-->
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btnSavePids"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Save"
-            android:layout_marginTop="16dp" />
+            android:layout_height="match_parent"
+            android:layout_columnWeight="1"
+            android:layout_rowWeight="1"
+            android:text="Live Data"
+            app:backgroundTint="#FFFFFF"
+            app:cornerRadius="12dp"
+            android:elevation="8dp"
+            android:translationZ="4dp"
+            android:stateListAnimator="@null"
+            android:textColor="#000"
+            android:textStyle="bold"
+            android:textSize="16sp"
+            android:gravity="center"
+            />
     </LinearLayout>
 </ScrollView>

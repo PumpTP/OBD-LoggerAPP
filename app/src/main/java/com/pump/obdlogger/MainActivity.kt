@@ -29,7 +29,7 @@ import java.util.*
 class MainActivity : AppCompatActivity() {
 
     // ===== UI (new layout) =====
-    private lateinit var tvAppTitle: TextView
+    private lateinit var tvAppTitle: ImageView
     private lateinit var tvConnectionStatus: TextView
     private lateinit var tvStatus: TextView
 
