@@ -16,6 +16,11 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Material3.DayNight.NoActionBar">
 
+        <activity android:name=".ConnectionActivity" />
+        <activity android:name=".SettingsActivity" />
+        <activity android:name=".GeneralSettingsActivity" />
+        <activity android:name=".PidSettingsActivity" />
+        <activity android:name=".CarProfileActivity" />
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -27,7 +32,6 @@
         <activity
             android:name=".RealtimeActivity"
             android:exported="false" />
-
 
         <!-- FileProvider to share CSV -->
         <provider

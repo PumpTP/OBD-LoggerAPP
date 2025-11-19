@@ -9,101 +9,209 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
 
-        <!-- STATUS AND DEVICE -->
+        <!-- App title -->
+        <TextView
+            android:id="@+id/tvAppTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="OBDpredict"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:paddingBottom="8dp" />
+
+        <!-- Connection status -->
+        <TextView
+            android:id="@+id/tvConnectionStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Status: Not connected"
+            android:textSize="14sp" />
+
         <TextView
             android:id="@+id/tvStatus"
             android:text="Status: Not connected"
-            android:textSize="16sp"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
 
-        <Spinner
-            android:id="@+id/spDevices"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp" />
 
-        <!-- MAIN CONTROLS -->
-        <Button
-            android:id="@+id/btnRefresh"
-            android:text="Refresh Devices"
+        <!-- Car status card -->
+        <LinearLayout
+            android:id="@+id/layoutCarStatus"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp" />
+            android:orientation="vertical"
+            android:padding="16dp"
+            android:layout_marginTop="16dp"
+            android:background="@android:color/background_dark">
 
-        <Button
-            android:id="@+id/btnConnect"
-            android:text="Connect"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp" />
+            <TextView
+                android:id="@+id/tvCarName"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Car: (not set)"
+                android:textStyle="bold"
+                android:textSize="16sp" />
 
-        <Button
-            android:id="@+id/btnStart"
-            android:text="Start Logging"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp" />
+            <TextView
+                android:id="@+id/tvCarStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Status: Disconnected"
+                android:layout_marginTop="4dp" />
 
-        <Button
-            android:id="@+id/btnStop"
-            android:text="Stop Logging"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="12dp"
+                android:weightSum="3">
 
-        <Button
-            android:id="@+id/btnShare"
-            android:text="Share CSV"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp" />
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
 
-        <Button
-            android:id="@+id/btnRealtime"
-            android:text="Real-time Data"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Odometer"
+                        android:textSize="12sp" />
+                    <TextView
+                        android:id="@+id/tvOdometer"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="40,000 km"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
 
-        <!-- LOG PATH + TIME -->
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Battery"
+                        android:textSize="12sp" />
+                    <TextView
+                        android:id="@+id/tvBattery"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="13.4 V"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Temp"
+                        android:textSize="12sp" />
+                    <TextView
+                        android:id="@+id/tvCoolant"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="90.2 °C"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- Navigation grid -->
         <TextView
-            android:id="@+id/tvElapsed"
-            android:text="t = 0.0 s"
-            android:layout_marginTop="8dp"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
-
-        <TextView
-            android:id="@+id/tvLogPath"
-            android:text="Log: none"
-            android:layout_marginTop="4dp"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
-
-        <!-- PID CHECKBOX LIST -->
-        <TextView
-            android:text="Select PIDs to Log:"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Navigation"
             android:textStyle="bold"
-            android:layout_marginTop="12dp"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
+            android:textSize="16sp"
+            android:layout_marginTop="24dp" />
 
-        <CheckBox android:id="@+id/cb0C" android:text="Engine RPM (0C)" android:layout_width="match_parent" android:layout_height="wrap_content" />
-        <CheckBox android:id="@+id/cb05" android:text="Coolant temperature (05)" android:layout_width="match_parent" android:layout_height="wrap_content" />
-        <CheckBox android:id="@+id/cb03" android:text="Fuel system status (03)" android:layout_width="match_parent" android:layout_height="wrap_content" />
-        <CheckBox android:id="@+id/cb04" android:text="Calculated engine load (04)" android:layout_width="match_parent" android:layout_height="wrap_content" />
-        <CheckBox android:id="@+id/cb0B" android:text="MAP pressure (0B)" android:layout_width="match_parent" android:layout_height="wrap_content" />
-        <CheckBox android:id="@+id/cb06" android:text="Short-term fuel trim (06)" android:layout_width="match_parent" android:layout_height="wrap_content" />
-        <CheckBox android:id="@+id/cb0D" android:text="Vehicle speed (0D)" android:layout_width="match_parent" android:layout_height="wrap_content" />
-        <CheckBox android:id="@+id/cb0E" android:text="Timing advance (0E)" android:layout_width="match_parent" android:layout_height="wrap_content" />
-        <CheckBox android:id="@+id/cb0F" android:text="Intake air temperature (0F)" android:layout_width="match_parent" android:layout_height="wrap_content" />
-        <CheckBox android:id="@+id/cb10" android:text="MAF air flow rate (10)" android:layout_width="match_parent" android:layout_height="wrap_content" />
-        <CheckBox android:id="@+id/cb11" android:text="Throttle position (11)" android:layout_width="match_parent" android:layout_height="wrap_content" />
-        <CheckBox android:id="@+id/cb15" android:text="O2 sensor bank1-sensor2 (15)" android:layout_width="match_parent" android:layout_height="wrap_content" />
-        <CheckBox android:id="@+id/cb45" android:text="Relative throttle position (45)" android:layout_width="match_parent" android:layout_height="wrap_content" />
-        <CheckBox android:id="@+id/cb47" android:text="Ambient air temperature (47)" android:layout_width="match_parent" android:layout_height="wrap_content" />
-        <CheckBox android:id="@+id/cb4C" android:text="Commanded throttle actuator (4C)" android:layout_width="match_parent" android:layout_height="wrap_content" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="8dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:weightSum="2">
+
+                <Button
+                    android:id="@+id/btnLiveData"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Live Data" />
+
+                <Button
+                    android:id="@+id/btnDriveLogs"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Drive Logs"
+                    android:layout_marginStart="8dp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:weightSum="2"
+                android:layout_marginTop="8dp">
+
+                <Button
+                    android:id="@+id/btnDiagnostics"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Diagnostics" />
+
+                <Button
+                    android:id="@+id/btnCarProfile"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Car Profile"
+                    android:layout_marginStart="8dp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:weightSum="2"
+                android:layout_marginTop="8dp">
+
+                <Button
+                    android:id="@+id/btnSettings"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Settings" />
+
+                <Button
+                    android:id="@+id/btnConnection"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Connection"
+                    android:layout_marginStart="8dp" />
+            </LinearLayout>
+        </LinearLayout>
 
     </LinearLayout>
 </ScrollView>

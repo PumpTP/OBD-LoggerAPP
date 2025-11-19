@@ -17,6 +17,7 @@ class ObdManager(private val ctx: Context) {
     private var socket: BluetoothSocket? = null
     private var input: InputStream? = null
     private var output: OutputStream? = null
+    var lastProtocol: String? = null
 
     private val sppUuid: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
     private val promptByte: Byte = '>'.code.toByte()
@@ -91,6 +92,8 @@ class ObdManager(private val ctx: Context) {
             sendRaw(cmd)
             delay(80)
         }
+        // Record the protocol used
+        lastProtocol = "ISO 15765-4 (CAN 29-bit, 500 kbps)"
     }
 
     // ---- New: Auto protocol init for broad compatibility ----
