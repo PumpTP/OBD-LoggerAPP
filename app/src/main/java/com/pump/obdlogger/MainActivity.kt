@@ -41,7 +41,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var btnLiveData: Button
     private lateinit var btnDriveLogs: Button
-    private lateinit var btnDiagnostics: Button
+//    private lateinit var btnDiagnostics: Button
     private lateinit var btnCarProfile: Button
     private lateinit var btnSettings: Button
     private lateinit var btnConnection: Button
@@ -136,7 +136,7 @@ class MainActivity : AppCompatActivity() {
 
                 val name = dev?.name ?: "OBD Device"
                 tvStatus.text = "Connected to $name"
-                tvConnectionStatus.text = "Connected to $name"
+//                tvConnectionStatus.text = "Connected to $name"
                 tvCarStatus.text = "Connected"
             }
         }
@@ -153,7 +153,7 @@ class MainActivity : AppCompatActivity() {
     // ===== View bind =====
     private fun bindViews() {
         tvAppTitle = findViewById(R.id.tvAppTitle)
-        tvConnectionStatus = findViewById(R.id.tvConnectionStatus)
+//        tvConnectionStatus = findViewById(R.id.tvConnectionStatus)
         tvStatus = findViewById(R.id.tvStatus)
 
         tvCarName = findViewById(R.id.tvCarName)
@@ -164,8 +164,8 @@ class MainActivity : AppCompatActivity() {
 
         btnLiveData = findViewById(R.id.btnLiveData)
         btnDriveLogs = findViewById(R.id.btnDriveLogs)
-        btnDiagnostics = findViewById(R.id.btnDiagnostics)
-        btnDiagnostics.visibility = View.GONE
+//        btnDiagnostics = findViewById(R.id.btnDiagnostics)
+//        btnDiagnostics.visibility = View.GONE
         btnCarProfile = findViewById(R.id.btnCarProfile)
         btnSettings = findViewById(R.id.btnSettings)
         btnConnection = findViewById(R.id.btnConnection)

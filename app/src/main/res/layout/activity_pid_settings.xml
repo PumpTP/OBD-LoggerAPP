@@ -30,7 +30,7 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:padding="8dp"
-            android:background="@android:color/background_dark" />
+            android:background="@android:color/background_light" />
 
         <Button
             android:id="@+id/btnSavePids"
