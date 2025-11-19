@@ -14,6 +14,7 @@ import androidx.appcompat.app.AlertDialog
 import android.os.Environment
 import android.provider.MediaStore
 import android.view.WindowManager
+import android.view.View
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -102,7 +103,6 @@ class MainActivity : AppCompatActivity() {
         }
         btnLiveData.setOnClickListener { openRealtime() }
         btnDriveLogs.setOnClickListener { showPastSessionsDialog() }
-        btnDiagnostics.setOnClickListener { toast("Diagnostics coming soon") }
         btnCarProfile.setOnClickListener {
             val i = Intent(this, CarProfileActivity::class.java)
             startActivity(i)
@@ -165,6 +165,7 @@ class MainActivity : AppCompatActivity() {
         btnLiveData = findViewById(R.id.btnLiveData)
         btnDriveLogs = findViewById(R.id.btnDriveLogs)
         btnDiagnostics = findViewById(R.id.btnDiagnostics)
+        btnDiagnostics.visibility = View.GONE
         btnCarProfile = findViewById(R.id.btnCarProfile)
         btnSettings = findViewById(R.id.btnSettings)
         btnConnection = findViewById(R.id.btnConnection)
@@ -352,9 +353,35 @@ class MainActivity : AppCompatActivity() {
                     val readings = mutableMapOf<Int, Double?>()
                     for (pid in allPids) {
                         readings[pid] = readPidValue(pid)
-
                     }
 
+                    // ----- Predictive maintenance alert -----
+                    val failure = failurePredictor.addSample(
+                        floatArrayOf(
+                            (readings[0x0C] ?: 0.0).toFloat(), // RPM
+                            (readings[0x0D] ?: 0.0).toFloat(), // Speed
+                            (readings[0x05] ?: 0.0).toFloat()  // Coolant
+                        )
+                    )
+
+                    // Status line: show speed / rpm / fail score (if available)
+                    tvStatus.text = if (failure != null) {
+                        "Status: ${"%.0f".format(readings[0x0D] ?: 0.0)} km/h, " +
+                                "${"%.0f".format(readings[0x0C] ?: 0.0)} rpm, " +
+                                "fail=${"%.3f".format(failure[0])}"
+                    } else {
+                        "Status: ${"%.0f".format(readings[0x0D] ?: 0.0)} km/h, " +
+                                "${"%.0f".format(readings[0x0C] ?: 0.0)} rpm"
+                    }
+
+                    // Top card car status: OK vs Alert
+                    tvCarStatus.text = when {
+                        failure == null -> "Monitoring…"
+                        failure[0] >= 0.5f -> "Alert: possible issue detected"
+                        else -> "Connected (healthy)"
+                    }
+
+                    // ----- CSV logging (unchanged) -----
                     if (elapsed != lastWrittenSec) {
                         val row = buildList {
                             add(elapsed)
